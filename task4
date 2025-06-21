@@ -1,0 +1,81 @@
+import requests
+from bs4 import BeautifulSoup
+import csv
+
+def get_star_rating(class_list):
+    """Convert the star rating from class names to numbers (1 to 5)."""
+    stars = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five']
+    for i, star in enumerate(stars):
+        if star.lower() in [cls.lower() for cls in class_list]:
+            return i
+    return 0  # Default if no match found
+
+def scrape_books(base_url, pages=1):
+    books_data = []
+
+    print("\n Starting the book scraping process...\n")
+
+    for page in range(1, pages + 1):
+        url = f"{base_url}catalogue/page-{page}.html"
+        print(f" Loading Page {page}: {url}")
+
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print(f" Error loading page {page}: {e}")
+            continue
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        books = soup.select('article.product_pod')
+
+        if not books:
+            print(" No books found on this page. Skipping...")
+            continue
+
+        for book in books:
+            try:
+                title = book.h3.a['title']
+                price = book.select_one('.price_color').text.strip()
+                rating_class = book.select_one('.star-rating')['class']
+                rating = get_star_rating(rating_class)
+
+                books_data.append({
+                    'Title': title,
+                    'Price': price,
+                    'Rating': rating
+                })
+            except Exception as e:
+                print(f" Skipping a book due to error: {e}")
+
+    print(f"\n Finished scraping {len(books_data)} books.\n")
+    return books_data
+
+def save_to_csv(data, filename='books_data.csv'):
+    if not data:
+        print(" No data to save.")
+        return
+
+    print(f" Saving book data to '{filename}'...")
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8') as file:
+            fieldnames = ['Title', 'Price', 'Rating']
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(data)
+        print(" Data saved successfully to CSV!")
+    except Exception as e:
+        print(f" Failed to save CSV: {e}")
+
+def main():
+    print(" Welcome to the Book Scraper!")
+    base_url = "http://books.toscrape.com/"
+    total_pages = 2  # You can change this to scrape more pages
+
+    books = scrape_books(base_url, pages=total_pages)
+    save_to_csv(books)
+
+    print("\n Done! You can now open 'books_data.csv' to see the results.\n")
+
+if __name__ == "__main__":
+    main()
